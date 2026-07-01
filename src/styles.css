@@ -99,6 +99,12 @@ body {
   min-width: 0;
 }
 
+.topbar-actions {
+  display: flex;
+  align-items: stretch;
+  min-width: 132px;
+}
+
 .menu-item {
   position: relative;
   min-width: 112px;
@@ -229,6 +235,12 @@ button.primary:hover:not(:disabled) {
   background: #1762ac;
 }
 
+.run-action {
+  height: 100%;
+  min-width: 132px;
+  white-space: nowrap;
+}
+
 label {
   color: var(--muted);
   font-size: 13px;
@@ -336,6 +348,14 @@ label {
   .menu-strip {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .topbar-actions {
+    min-width: 0;
+  }
+
+  .run-action {
+    min-width: 0;
   }
 
   .menu-item {

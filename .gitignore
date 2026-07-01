@@ -1,0 +1,3 @@
+server/server_jobs/
+server/__pycache__/
+.env

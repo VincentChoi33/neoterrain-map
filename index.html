@@ -61,12 +61,27 @@
     </section>
 
     <section class="section">
+      <div class="section-title">
+        <span>SAM3.1</span>
+        <span id="samStatus" class="status">미연결</span>
+      </div>
+      <label for="samApiUrl">develop SAM API</label>
+      <input id="samApiUrl" type="url" spellcheck="false" />
+      <div class="control-grid">
+        <button id="saveSamApiBtn" type="button">서버 저장</button>
+        <button id="checkSamApiBtn" type="button">연결 확인</button>
+      </div>
+      <p class="note">develop에서 SAM 서버를 실행하고 SSH tunnel 또는 공개 URL을 연결합니다. 기본값은 로컬 터널 주소입니다.</p>
+    </section>
+
+    <section class="section">
       <button id="runAnalysisBtn" class="primary" type="button">분석 실행</button>
       <div class="control-grid">
         <button id="exportGeoJsonBtn" type="button" disabled>GeoJSON</button>
         <button id="exportJsonBtn" type="button" disabled>JSON</button>
       </div>
-      <p class="note">현재 버전은 Esri 위성 배경 위에 AOI를 잡고 no-go/uncertain polygon 레이어를 생성하는 프론트 MVP입니다.</p>
+      <button id="demoAnalysisBtn" type="button">데모 마스크</button>
+      <p class="note">분석 실행은 SAM3.1 서버 결과를 사용합니다. 서버 없이 화면만 확인할 때만 데모 마스크를 사용하세요.</p>
     </section>
 
     <section class="section detail">

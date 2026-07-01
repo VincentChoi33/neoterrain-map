@@ -1,6 +1,10 @@
 (function () {
   const DEFAULT_CENTER = [37.6865, 127.408];
   const METERS_PER_LAT = 111320;
+  const SAM_API_STORAGE = "neoterrain_sam_api";
+  const DEFAULT_SAM_API_URL = "http://127.0.0.1:8787/sam/roi";
+  const MAX_SAM_GRID_N = 500;
+  const TARGET_CELL_M = 10;
   const ESRI_IMAGERY =
     "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
   const ESRI_ATTRIBUTION =
@@ -12,7 +16,11 @@
     features: [],
     selectedFeatureId: null,
     opacity: 0.62,
-    useReasonColors: true
+    useReasonColors: true,
+    samApiUrl: localStorage.getItem(SAM_API_STORAGE) || DEFAULT_SAM_API_URL,
+    samStatus: "idle",
+    analysisBusy: false,
+    lastSamGrid: null
   };
 
   const el = {
@@ -23,8 +31,13 @@
     drawAoiBtn: document.getElementById("drawAoiBtn"),
     screenAoiBtn: document.getElementById("screenAoiBtn"),
     runAnalysisBtn: document.getElementById("runAnalysisBtn"),
+    demoAnalysisBtn: document.getElementById("demoAnalysisBtn"),
     exportGeoJsonBtn: document.getElementById("exportGeoJsonBtn"),
     exportJsonBtn: document.getElementById("exportJsonBtn"),
+    samApiUrl: document.getElementById("samApiUrl"),
+    saveSamApiBtn: document.getElementById("saveSamApiBtn"),
+    checkSamApiBtn: document.getElementById("checkSamApiBtn"),
+    samStatus: document.getElementById("samStatus"),
     noGoToggle: document.getElementById("noGoToggle"),
     uncertainToggle: document.getElementById("uncertainToggle"),
     reasonToggle: document.getElementById("reasonToggle"),
@@ -57,6 +70,26 @@
     return METERS_PER_LAT * Math.cos((lat * Math.PI) / 180);
   }
 
+  function clamp(value, min, max) {
+    return Math.max(min, Math.min(max, value));
+  }
+
+  function sleep(ms) {
+    return new Promise(resolve => window.setTimeout(resolve, ms));
+  }
+
+  function distanceMeters(a, b) {
+    const radius = 6371008.8;
+    const lat1 = (a.lat * Math.PI) / 180;
+    const lat2 = (b.lat * Math.PI) / 180;
+    const dLat = ((b.lat - a.lat) * Math.PI) / 180;
+    const dLng = ((b.lng - a.lng) * Math.PI) / 180;
+    const h =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+    return 2 * radius * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+  }
+
   function boundsFromCenter(center, sizeKm) {
     const halfM = (sizeKm * 1000) / 2;
     const latPad = halfM / METERS_PER_LAT;
@@ -77,6 +110,7 @@
     };
     state.features = [];
     state.selectedFeatureId = null;
+    state.lastSamGrid = null;
     drawAoi();
     renderMasks();
     updateUi();
@@ -115,6 +149,31 @@
     toast.timer = window.setTimeout(() => {
       el.toast.hidden = true;
     }, 2600);
+  }
+
+  function setSamStatus(status, message) {
+    state.samStatus = status;
+    const labels = {
+      idle: "대기",
+      saved: "저장됨",
+      checking: "확인중",
+      ready: "연결됨",
+      queued: "작업 생성",
+      running: "추론중",
+      polling: "결과 대기",
+      completed: "완료",
+      failed: "실패"
+    };
+    el.samStatus.textContent = message || labels[status] || status;
+  }
+
+  function setBusy(active, message) {
+    state.analysisBusy = active;
+    el.runAnalysisBtn.disabled = active;
+    el.demoAnalysisBtn.disabled = active;
+    el.checkSamApiBtn.disabled = active;
+    el.analysisStatus.textContent = message || (active ? "분석중" : state.features.length ? "완료" : "대기");
+    el.runAnalysisBtn.textContent = active ? "분석 중..." : "분석 실행";
   }
 
   function hash(seed) {
@@ -293,6 +352,303 @@
     toast("no-go 마스크 분석을 생성했습니다.");
   }
 
+  function aoiMetrics(bounds) {
+    const center = bounds.getCenter();
+    const widthM = distanceMeters(
+      { lat: center.lat, lng: bounds.getWest() },
+      { lat: center.lat, lng: bounds.getEast() }
+    );
+    const heightM = distanceMeters(
+      { lat: bounds.getSouth(), lng: center.lng },
+      { lat: bounds.getNorth(), lng: center.lng }
+    );
+    const maxSideM = Math.max(widthM, heightM);
+    const gridN = clamp(Math.round(maxSideM / TARGET_CELL_M), 64, MAX_SAM_GRID_N);
+    const cellM = Math.max(TARGET_CELL_M, Math.round(maxSideM / gridN));
+    return { center, widthM, heightM, maxSideM, gridN, cellM };
+  }
+
+  function currentSamRequestPayload() {
+    const bounds = aoiBounds();
+    const metrics = aoiMetrics(bounds);
+    return {
+      requestId: `neoterrain-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      product: "NeoTerrainMap",
+      center: { lat: metrics.center.lat, lng: metrics.center.lng },
+      bbox: {
+        south: bounds.getSouth(),
+        west: bounds.getWest(),
+        north: bounds.getNorth(),
+        east: bounds.getEast()
+      },
+      meters: {
+        width: Math.round(metrics.widthM),
+        height: Math.round(metrics.heightM)
+      },
+      grid: {
+        n: metrics.gridN,
+        cellM: metrics.cellM
+      },
+      image: {
+        source: "Esri World Imagery",
+        zoom: clamp(Math.round(map.getZoom()), 15, 17),
+        size: 1536
+      }
+    };
+  }
+
+  function absoluteUrl(url, baseUrl) {
+    try {
+      return new URL(url, baseUrl || window.location.href).toString();
+    } catch {
+      return url;
+    }
+  }
+
+  async function fetchSamJson(url, options = {}) {
+    const headers = new Headers(options.headers || {});
+    if (/ngrok/i.test(url)) headers.set("ngrok-skip-browser-warning", "true");
+    const response = await fetch(url, { ...options, headers });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok && !data.statusUrl && !data.status_url) {
+      throw new Error(data.message || data.error || `SAM 서버 ${response.status}`);
+    }
+    return { data, responseUrl: response.url || url };
+  }
+
+  function isSamGridPayload(data) {
+    return Boolean(data?.meta?.bbox && data?.meta?.grid && Array.isArray(data?.cells));
+  }
+
+  async function resolveSamResponse(data, baseUrl) {
+    if (isSamGridPayload(data)) return data;
+    if (isSamGridPayload(data?.segmentation_grid)) return data.segmentation_grid;
+    if (isSamGridPayload(data?.grid)) return data.grid;
+    if (isSamGridPayload(data?.result?.segmentation_grid)) return data.result.segmentation_grid;
+
+    const directResultUrl = data?.resultUrl || data?.result_url || data?.segmentationGridUrl || data?.segmentation_grid_url;
+    if (directResultUrl) {
+      const result = await fetchSamJson(absoluteUrl(directResultUrl, baseUrl), { cache: "no-store" });
+      return resolveSamResponse(result.data, result.responseUrl);
+    }
+
+    const statusUrl = data?.statusUrl || data?.status_url || data?.pollUrl || data?.poll_url;
+    if (!statusUrl) throw new Error("SAM 응답에 segmentation grid 또는 statusUrl이 없습니다.");
+
+    const pollUrl = absoluteUrl(statusUrl, baseUrl);
+    for (let attempt = 0; attempt < 180; attempt++) {
+      setSamStatus("polling", `대기 ${attempt + 1}회`);
+      await sleep(2000);
+      const poll = await fetchSamJson(pollUrl, { cache: "no-store" });
+      const status = String(poll.data?.status || poll.data?.state || "").toLowerCase();
+      if (["failed", "error", "cancelled"].includes(status)) {
+        throw new Error(poll.data?.message || poll.data?.error || "SAM inference failed");
+      }
+      if (["succeeded", "success", "complete", "completed", "done", "ready"].includes(status) || isSamGridPayload(poll.data)) {
+        return resolveSamResponse(poll.data, poll.responseUrl);
+      }
+      const resultUrl = poll.data?.resultUrl || poll.data?.result_url || poll.data?.segmentationGridUrl || poll.data?.segmentation_grid_url;
+      if (resultUrl) {
+        const result = await fetchSamJson(absoluteUrl(resultUrl, poll.responseUrl), { cache: "no-store" });
+        return resolveSamResponse(result.data, result.responseUrl);
+      }
+    }
+    throw new Error("SAM polling timeout");
+  }
+
+  function classifySamRecord(record) {
+    const cls = record.visionClass;
+    if (record.water || record.stream || cls === "water" || cls === "stream") {
+      return { severity: "blocked", reason: "water" };
+    }
+    if (record.building || record.built || cls === "built") {
+      return { severity: "blocked", reason: "structure" };
+    }
+    if (record.forest || cls === "trees") {
+      return { severity: "uncertain", reason: "dense_vegetation" };
+    }
+    if ((record.visionUnknownPct || 0) >= 75) {
+      return { severity: "uncertain", reason: "shadow_unknown" };
+    }
+    return null;
+  }
+
+  function rectanglesForRecords(records, gridN) {
+    const groups = new Map();
+    for (const record of records) {
+      const cls = classifySamRecord(record);
+      if (!cls) continue;
+      const key = `${cls.severity}|${cls.reason}`;
+      if (!groups.has(key)) groups.set(key, new Map());
+      const rows = groups.get(key);
+      if (!rows.has(record.j)) rows.set(record.j, []);
+      rows.get(record.j).push(record);
+    }
+
+    const rectangles = [];
+    for (const [key, rows] of groups) {
+      const [severity, reason] = key.split("|");
+      const active = new Map();
+      const orderedRows = Array.from(rows.keys()).sort((a, b) => a - b);
+      for (const j of orderedRows) {
+        const row = rows.get(j).sort((a, b) => a.i - b.i);
+        const nextActive = new Map();
+        let runStart = null;
+        let previousI = null;
+        let sumConfidence = 0;
+        let count = 0;
+
+        function closeRun() {
+          if (runStart === null) return;
+          const runEnd = previousI;
+          const runKey = `${runStart}:${runEnd}`;
+          const existing = active.get(runKey);
+          if (existing && existing.j1 === j - 1) {
+            existing.j1 = j;
+            existing.confidenceSum += sumConfidence;
+            existing.count += count;
+            nextActive.set(runKey, existing);
+          } else {
+            nextActive.set(runKey, {
+              severity,
+              reason,
+              i0: runStart,
+              i1: runEnd,
+              j0: j,
+              j1: j,
+              confidenceSum: sumConfidence,
+              count
+            });
+          }
+          runStart = null;
+          previousI = null;
+          sumConfidence = 0;
+          count = 0;
+        }
+
+        for (const record of row) {
+          if (runStart === null) runStart = record.i;
+          if (previousI !== null && record.i !== previousI + 1) closeRun();
+          if (runStart === null) runStart = record.i;
+          previousI = record.i;
+          sumConfidence += Number(record.visionConfidence || record.confidence || 0.55);
+          count += 1;
+        }
+        closeRun();
+
+        for (const [runKey, rect] of active) {
+          if (!nextActive.has(runKey)) rectangles.push(rect);
+        }
+        active.clear();
+        for (const [runKey, rect] of nextActive) active.set(runKey, rect);
+      }
+      for (const rect of active.values()) rectangles.push(rect);
+    }
+    return rectangles.filter(rect => rect.i0 >= 0 && rect.j0 >= 0 && rect.i1 < gridN && rect.j1 < gridN);
+  }
+
+  function rectangleToPolygon(rect, bbox, gridN) {
+    const latSpan = bbox.north - bbox.south;
+    const lngSpan = bbox.east - bbox.west;
+    const west = bbox.west + (rect.i0 / gridN) * lngSpan;
+    const east = bbox.west + ((rect.i1 + 1) / gridN) * lngSpan;
+    const north = bbox.north - (rect.j0 / gridN) * latSpan;
+    const south = bbox.north - ((rect.j1 + 1) / gridN) * latSpan;
+    return [
+      [north, west],
+      [north, east],
+      [south, east],
+      [south, west]
+    ];
+  }
+
+  function featuresFromSamGrid(grid) {
+    const bbox = grid.meta.bbox;
+    const gridN = Number(grid.meta.grid?.n || 500);
+    const rectangles = rectanglesForRecords(grid.cells || [], gridN);
+    return rectangles.map((rect, index) => featureMeta(
+      `sam-${index + 1}`,
+      rect.reason,
+      rect.severity,
+      clamp(rect.confidenceSum / Math.max(1, rect.count), 0.35, 0.96),
+      rectangleToPolygon(rect, bbox, gridN),
+      {
+        source: ["sam3_1_segmentation"],
+        properties: {
+          cells: rect.count,
+          note: rect.severity === "blocked" ? "SAM3.1 no-go 후보" : "SAM3.1 판독 불확실 후보"
+        }
+      }
+    ));
+  }
+
+  async function runSamAnalysis() {
+    const bounds = aoiBounds();
+    if (!bounds) {
+      toast("먼저 AOI를 지정하세요.");
+      return;
+    }
+    const apiUrl = (el.samApiUrl.value || "").trim();
+    if (!apiUrl) {
+      setSamStatus("failed", "서버 없음");
+      toast("SAM 서버 주소를 입력하세요.");
+      return;
+    }
+
+    setBusy(true, "SAM 요청중");
+    setSamStatus("queued");
+    try {
+      const payload = currentSamRequestPayload();
+      const { data, responseUrl } = await fetchSamJson(apiUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      setSamStatus("running");
+      const grid = await resolveSamResponse(data, responseUrl);
+      const features = featuresFromSamGrid(grid);
+      state.lastSamGrid = grid;
+      state.features = features;
+      state.selectedFeatureId = features[0]?.id || null;
+      renderMasks();
+      updateUi();
+      if (features[0]) showFeatureDetail(features[0]);
+      setSamStatus("completed");
+      toast(`SAM3.1 마스크 ${features.length}개를 표시했습니다.`);
+    } catch (err) {
+      console.warn("SAM analysis failed:", err);
+      state.features = [];
+      state.selectedFeatureId = null;
+      state.lastSamGrid = null;
+      renderMasks();
+      updateUi();
+      setSamStatus("failed");
+      el.featureDetail.textContent = `SAM3.1 분석 실패: ${err.message || err}`;
+      toast("SAM3.1 분석 실패");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function checkSamApi() {
+    const apiUrl = (el.samApiUrl.value || "").trim();
+    if (!apiUrl) {
+      toast("SAM 서버 주소를 입력하세요.");
+      return;
+    }
+    setSamStatus("checking");
+    try {
+      const healthUrl = absoluteUrl("/healthz", apiUrl);
+      const result = await fetchSamJson(healthUrl, { cache: "no-store" });
+      if (result.data?.status !== "ok") throw new Error("healthz status is not ok");
+      setSamStatus("ready");
+      toast("SAM 서버 연결 확인됨");
+    } catch (err) {
+      setSamStatus("failed");
+      toast(`SAM 서버 연결 실패: ${err.message || err}`);
+    }
+  }
+
   function polygonToGeoJsonCoordinates(latLngs) {
     return [latLngs.map(([lat, lng]) => [lng, lat]).concat([[latLngs[0][1], latLngs[0][0]]])];
   }
@@ -359,7 +715,7 @@
         showFeatureDetail(feature);
         renderMasks();
       });
-      if (feature.confidence >= 0.78 || feature.severity === "uncertain") {
+      if ((visible.length <= 40 && feature.confidence >= 0.78) || feature.id === state.selectedFeatureId) {
         const center = layer.getBounds().getCenter();
         L.marker(center, {
           icon: L.divIcon({
@@ -379,7 +735,7 @@
       <dl>
         <dt>근거</dt><dd>${feature.reasonLabel}</dd>
         <dt>신뢰도</dt><dd>${Math.round(feature.confidence * 100)}%</dd>
-        <dt>Source</dt><dd>${feature.source.join(", ")}</dd>
+        <dt>출처</dt><dd>${feature.source.join(", ")}</dd>
         ${props.slopeDeg ? `<dt>추정 경사</dt><dd>${props.slopeDeg}도</dd>` : ""}
         ${props.note ? `<dt>메모</dt><dd>${props.note}</dd>` : ""}
       </dl>
@@ -389,13 +745,13 @@
   function updateUi() {
     const bounds = aoiBounds();
     el.aoiStatus.textContent = bounds ? "지정됨" : "미지정";
-    el.analysisStatus.textContent = state.features.length ? "완료" : "대기";
+    if (!state.analysisBusy) el.analysisStatus.textContent = state.features.length ? "완료" : "대기";
     el.featureCount.textContent = `${state.features.length}개`;
     el.exportGeoJsonBtn.disabled = state.features.length === 0;
     el.exportJsonBtn.disabled = state.features.length === 0;
     if (!state.features.length) {
       el.featureDetail.textContent = bounds
-        ? "분석 실행을 누르면 no-go/uncertain 마스크가 생성됩니다."
+        ? "분석 실행을 누르면 SAM3.1 no-go/uncertain 마스크가 생성됩니다."
         : "AOI를 지정하고 분석을 실행하세요. 마스크를 클릭하면 근거와 신뢰도가 표시됩니다.";
     }
   }
@@ -465,7 +821,18 @@
     }
   });
 
-  el.runAnalysisBtn.addEventListener("click", generateAnalysis);
+  el.samApiUrl.value = state.samApiUrl;
+  setSamStatus("idle");
+
+  el.runAnalysisBtn.addEventListener("click", runSamAnalysis);
+  el.demoAnalysisBtn.addEventListener("click", generateAnalysis);
+  el.saveSamApiBtn.addEventListener("click", () => {
+    state.samApiUrl = (el.samApiUrl.value || "").trim();
+    localStorage.setItem(SAM_API_STORAGE, state.samApiUrl);
+    setSamStatus("saved");
+    toast("SAM 서버 주소를 저장했습니다.");
+  });
+  el.checkSamApiBtn.addEventListener("click", checkSamApi);
   el.noGoToggle.addEventListener("change", renderMasks);
   el.uncertainToggle.addEventListener("change", renderMasks);
   el.reasonToggle.addEventListener("change", event => {

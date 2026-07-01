@@ -118,12 +118,14 @@ body {
 
 button,
 select,
+input[type="url"],
 input[type="range"] {
   width: 100%;
 }
 
 button,
-select {
+select,
+input[type="url"] {
   min-height: 42px;
   border: 1px solid #3a5066;
   border-radius: 6px;
@@ -135,6 +137,16 @@ select {
 
 button {
   cursor: pointer;
+}
+
+input[type="url"] {
+  padding: 0 10px;
+  font-weight: 700;
+}
+
+input[type="url"]:focus {
+  outline: 2px solid rgba(47, 140, 255, 0.42);
+  outline-offset: 1px;
 }
 
 button:hover:not(:disabled) {

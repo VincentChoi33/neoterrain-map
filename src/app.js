@@ -2,7 +2,7 @@
   const DEFAULT_CENTER = [37.6865, 127.408];
   const METERS_PER_LAT = 111320;
   const SAM_API_STORAGE = "neoterrain_sam_api";
-  const DEFAULT_SAM_API_URL = "http://127.0.0.1:8787/sam/roi";
+  const DEFAULT_SAM_API_URL = "https://arg-founder-production-attended.trycloudflare.com/sam/roi";
   const MAX_SAM_GRID_N = 500;
   const TARGET_CELL_M = 10;
   const ESRI_IMAGERY =

@@ -28,10 +28,10 @@ http://127.0.0.1:8140
 
 ## SAM3.1 develop 서버
 
-프론트의 기본 SAM API는 로컬 터널 주소입니다.
+프론트의 기본 SAM API는 현재 develop 서버를 바라보는 공개 tunnel 주소입니다.
 
 ```text
-http://127.0.0.1:8787/sam/roi
+https://arg-founder-production-attended.trycloudflare.com/sam/roi
 ```
 
 develop 서버에서 실행:

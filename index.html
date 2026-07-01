@@ -12,88 +12,116 @@
 <body>
   <div id="map" aria-label="NeoTerrainMap 지도"></div>
 
-  <aside class="panel" aria-label="분석 제어">
-    <header class="brand">
+  <header class="topbar" aria-label="분석 제어">
+    <div class="brand">
       <img src="assets/neospectra-logo.png" alt="NeoSpectra" />
       <div>
         <h1>NeoTerrainMap</h1>
         <p>위성영상 기반 no-go 마스크 레이어</p>
       </div>
-    </header>
+    </div>
 
-    <section class="section">
-      <div class="section-title">
-        <span>관심영역</span>
-        <span id="aoiStatus" class="status">미지정</span>
+    <nav class="menu-strip" aria-label="NeoTerrainMap 메뉴">
+      <div class="menu-item">
+        <button class="menu-trigger" type="button" data-menu="aoiMenu">
+          <span>관심영역</span>
+          <span id="aoiStatus" class="status">미지정</span>
+        </button>
+        <section id="aoiMenu" class="menu-panel">
+          <div class="section-title">
+            <span>관심영역</span>
+            <span class="status">AOI</span>
+          </div>
+          <div class="control-grid">
+            <button id="drawAoiBtn" type="button">AOI 지정</button>
+            <button id="screenAoiBtn" type="button">현재 화면</button>
+          </div>
+          <label for="aoiSize">기본 AOI 크기</label>
+          <select id="aoiSize">
+            <option value="1">1km x 1km</option>
+            <option value="2" selected>2km x 2km</option>
+            <option value="3">3km x 3km</option>
+            <option value="5">5km x 5km</option>
+          </select>
+        </section>
       </div>
-      <div class="control-grid">
-        <button id="drawAoiBtn" type="button">AOI 지정</button>
-        <button id="screenAoiBtn" type="button">현재 화면</button>
-      </div>
-      <label for="aoiSize">기본 AOI 크기</label>
-      <select id="aoiSize">
-        <option value="1">1km x 1km</option>
-        <option value="2" selected>2km x 2km</option>
-        <option value="3">3km x 3km</option>
-        <option value="5">5km x 5km</option>
-      </select>
-    </section>
 
-    <section class="section">
-      <div class="section-title">
-        <span>레이어</span>
-        <span id="analysisStatus" class="status">대기</span>
+      <div class="menu-item">
+        <button class="menu-trigger" type="button" data-menu="layerMenu">
+          <span>레이어</span>
+          <span id="analysisStatus" class="status">대기</span>
+        </button>
+        <section id="layerMenu" class="menu-panel">
+          <div class="section-title">
+            <span>레이어</span>
+            <span class="status">표시</span>
+          </div>
+          <label class="switch">
+            <input id="noGoToggle" type="checkbox" checked />
+            <span>못 가는 영역</span>
+          </label>
+          <label class="switch">
+            <input id="uncertainToggle" type="checkbox" checked />
+            <span>불확실 영역</span>
+          </label>
+          <label class="switch">
+            <input id="reasonToggle" type="checkbox" checked />
+            <span>근거별 색상</span>
+          </label>
+          <label for="opacityRange">마스크 투명도 <span id="opacityValue">62%</span></label>
+          <input id="opacityRange" type="range" min="25" max="90" value="62" />
+        </section>
       </div>
-      <label class="switch">
-        <input id="noGoToggle" type="checkbox" checked />
-        <span>못 가는 영역</span>
-      </label>
-      <label class="switch">
-        <input id="uncertainToggle" type="checkbox" checked />
-        <span>불확실 영역</span>
-      </label>
-      <label class="switch">
-        <input id="reasonToggle" type="checkbox" checked />
-        <span>근거별 색상</span>
-      </label>
-      <label for="opacityRange">마스크 투명도 <span id="opacityValue">62%</span></label>
-      <input id="opacityRange" type="range" min="25" max="90" value="62" />
-    </section>
 
-    <section class="section">
-      <div class="section-title">
-        <span>SAM3.1</span>
-        <span id="samStatus" class="status">미연결</span>
+      <div class="menu-item">
+        <button class="menu-trigger" type="button" data-menu="samMenu">
+          <span>SAM3.1</span>
+          <span id="samStatus" class="status">미연결</span>
+        </button>
+        <section id="samMenu" class="menu-panel wide">
+          <div class="section-title">
+            <span>SAM3.1</span>
+            <span class="status">서버</span>
+          </div>
+          <label for="samApiUrl">develop SAM API</label>
+          <input id="samApiUrl" type="url" spellcheck="false" />
+          <div class="control-grid">
+            <button id="saveSamApiBtn" type="button">서버 저장</button>
+            <button id="checkSamApiBtn" type="button">연결 확인</button>
+          </div>
+          <p class="note">develop에서 SAM 서버를 실행하고 공개 URL을 연결합니다. 기본값은 현재 tunnel 주소입니다.</p>
+        </section>
       </div>
-      <label for="samApiUrl">develop SAM API</label>
-      <input id="samApiUrl" type="url" spellcheck="false" />
-      <div class="control-grid">
-        <button id="saveSamApiBtn" type="button">서버 저장</button>
-        <button id="checkSamApiBtn" type="button">연결 확인</button>
-      </div>
-      <p class="note">develop에서 SAM 서버를 실행하고 SSH tunnel 또는 공개 URL을 연결합니다. 기본값은 로컬 터널 주소입니다.</p>
-    </section>
 
-    <section class="section">
-      <button id="runAnalysisBtn" class="primary" type="button">분석 실행</button>
-      <div class="control-grid">
-        <button id="exportGeoJsonBtn" type="button" disabled>GeoJSON</button>
-        <button id="exportJsonBtn" type="button" disabled>JSON</button>
+      <div class="menu-item">
+        <button class="menu-trigger" type="button" data-menu="analysisMenu">
+          <span>분석</span>
+          <span class="status">실행</span>
+        </button>
+        <section id="analysisMenu" class="menu-panel">
+          <button id="runAnalysisBtn" class="primary" type="button">분석 실행</button>
+          <div class="control-grid">
+            <button id="exportGeoJsonBtn" type="button" disabled>GeoJSON</button>
+            <button id="exportJsonBtn" type="button" disabled>JSON</button>
+          </div>
+          <button id="demoAnalysisBtn" type="button">데모 마스크</button>
+          <p class="note">분석 실행은 SAM3.1 서버 결과를 사용합니다. 서버 없이 화면만 확인할 때만 데모 마스크를 사용하세요.</p>
+        </section>
       </div>
-      <button id="demoAnalysisBtn" type="button">데모 마스크</button>
-      <p class="note">분석 실행은 SAM3.1 서버 결과를 사용합니다. 서버 없이 화면만 확인할 때만 데모 마스크를 사용하세요.</p>
-    </section>
 
-    <section class="section detail">
-      <div class="section-title">
-        <span>판독 정보</span>
-        <span id="featureCount" class="status">0개</span>
+      <div class="menu-item">
+        <button class="menu-trigger" type="button" data-menu="detailMenu">
+          <span>판독 정보</span>
+          <span id="featureCount" class="status">0개</span>
+        </button>
+        <section id="detailMenu" class="menu-panel detail-panel">
+          <div id="featureDetail" class="detail-box">
+            AOI를 지정하고 분석을 실행하세요. 마스크를 클릭하면 근거와 신뢰도가 표시됩니다.
+          </div>
+        </section>
       </div>
-      <div id="featureDetail" class="detail-box">
-        AOI를 지정하고 분석을 실행하세요. 마스크를 클릭하면 근거와 신뢰도가 표시됩니다.
-      </div>
-    </section>
-  </aside>
+    </nav>
+  </header>
 
   <div id="toast" class="toast" hidden></div>
 

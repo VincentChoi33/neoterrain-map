@@ -65,6 +65,8 @@
   let dragStart = null;
   let previewRect = null;
   let suppressNextClick = false;
+  const menuTriggers = Array.from(document.querySelectorAll(".menu-trigger"));
+  const menuPanels = Array.from(document.querySelectorAll(".menu-panel"));
 
   function metersPerLng(lat) {
     return METERS_PER_LAT * Math.cos((lat * Math.PI) / 180);
@@ -158,13 +160,19 @@
       saved: "저장됨",
       checking: "확인중",
       ready: "연결됨",
-      queued: "작업 생성",
-      running: "추론중",
-      polling: "결과 대기",
-      completed: "완료",
+      queued: "0%",
+      running: "12%",
+      polling: "진행중",
+      completed: "100%",
       failed: "실패"
     };
     el.samStatus.textContent = message || labels[status] || status;
+  }
+
+  function setAnalysisProgress(percent) {
+    const pct = clamp(Math.round(percent), 0, 100);
+    setSamStatus("polling", `${pct}%`);
+    el.analysisStatus.textContent = `${pct}%`;
   }
 
   function setBusy(active, message) {
@@ -437,7 +445,8 @@
 
     const pollUrl = absoluteUrl(statusUrl, baseUrl);
     for (let attempt = 0; attempt < 180; attempt++) {
-      setSamStatus("polling", `대기 ${attempt + 1}회`);
+      const pct = 18 + (1 - Math.exp(-(attempt + 1) / 18)) * 78;
+      setAnalysisProgress(Math.min(96, pct));
       await sleep(2000);
       const poll = await fetchSamJson(pollUrl, { cache: "no-store" });
       const status = String(poll.data?.status || poll.data?.state || "").toLowerCase();
@@ -595,8 +604,8 @@
       return;
     }
 
-    setBusy(true, "SAM 요청중");
-    setSamStatus("queued");
+    setBusy(true, "0%");
+    setSamStatus("queued", "0%");
     try {
       const payload = currentSamRequestPayload();
       const { data, responseUrl } = await fetchSamJson(apiUrl, {
@@ -604,7 +613,8 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
       });
-      setSamStatus("running");
+      setSamStatus("running", "12%");
+      el.analysisStatus.textContent = "12%";
       const grid = await resolveSamResponse(data, responseUrl);
       const features = featuresFromSamGrid(grid);
       state.lastSamGrid = grid;
@@ -613,7 +623,8 @@
       renderMasks();
       updateUi();
       if (features[0]) showFeatureDetail(features[0]);
-      setSamStatus("completed");
+      setSamStatus("completed", "100%");
+      el.analysisStatus.textContent = "100%";
       toast(`SAM3.1 마스크 ${features.length}개를 표시했습니다.`);
     } catch (err) {
       console.warn("SAM analysis failed:", err);
@@ -773,6 +784,35 @@
     setAoi(bounds, "draw");
     toast("AOI가 지정됐습니다.");
   }
+
+  function setOpenMenu(panelId) {
+    for (const panel of menuPanels) {
+      panel.classList.toggle("open", panel.id === panelId);
+    }
+    for (const trigger of menuTriggers) {
+      const active = trigger.dataset.menu === panelId;
+      trigger.classList.toggle("active", active);
+      trigger.setAttribute("aria-expanded", String(active));
+    }
+  }
+
+  menuTriggers.forEach(trigger => {
+    trigger.setAttribute("aria-expanded", "false");
+    trigger.addEventListener("click", event => {
+      event.stopPropagation();
+      const panel = document.getElementById(trigger.dataset.menu);
+      setOpenMenu(panel?.classList.contains("open") ? "" : trigger.dataset.menu);
+    });
+  });
+
+  menuPanels.forEach(panel => {
+    panel.addEventListener("click", event => event.stopPropagation());
+  });
+
+  document.addEventListener("click", () => setOpenMenu(""));
+  document.addEventListener("keydown", event => {
+    if (event.key === "Escape") setOpenMenu("");
+  });
 
   map.on("mousedown", event => {
     if (state.mode !== "draw-aoi") return;

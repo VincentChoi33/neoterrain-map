@@ -1,0 +1,258 @@
+:root {
+  --bg: #0b1015;
+  --panel: rgba(13, 18, 24, 0.94);
+  --panel-border: rgba(151, 170, 190, 0.28);
+  --text: #eef5f8;
+  --muted: #aab8c5;
+  --line: #304152;
+  --blue: #2f8cff;
+  --red: #d93f3f;
+  --gray: #77808c;
+  --orange: #d88738;
+  --violet: #9b72d9;
+  --cyan: #3dbed8;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#map {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  overflow: hidden;
+}
+
+#map {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+}
+
+.panel {
+  position: fixed;
+  top: 20px;
+  left: 20px;
+  z-index: 500;
+  width: min(380px, calc(100vw - 40px));
+  max-height: calc(100vh - 40px);
+  overflow: auto;
+  padding: 18px;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  box-shadow: 0 22px 70px rgba(0, 0, 0, 0.42);
+  backdrop-filter: blur(14px);
+}
+
+.brand {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.brand img {
+  width: 42px;
+  height: 42px;
+  object-fit: contain;
+}
+
+.brand h1 {
+  margin: 0;
+  font-size: 24px;
+  line-height: 1.1;
+  letter-spacing: 0;
+}
+
+.brand p,
+.note {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.section {
+  display: grid;
+  gap: 12px;
+  padding: 16px 0;
+  border-bottom: 1px solid rgba(48, 65, 82, 0.75);
+}
+
+.section:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.section-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  font-weight: 800;
+  font-size: 15px;
+}
+
+.status {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.control-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+button,
+select,
+input[type="range"] {
+  width: 100%;
+}
+
+button,
+select {
+  min-height: 42px;
+  border: 1px solid #3a5066;
+  border-radius: 6px;
+  background: #17212d;
+  color: var(--text);
+  font: inherit;
+  font-weight: 800;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  border-color: #5f84a6;
+  background: #1f2d3c;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  color: #6f7c86;
+  background: #111922;
+}
+
+button.primary {
+  background: #14518d;
+  border-color: #2b86d1;
+}
+
+button.primary:hover:not(:disabled) {
+  background: #1762ac;
+}
+
+label {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.switch {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.switch input {
+  width: 18px;
+  height: 18px;
+}
+
+.detail-box {
+  min-height: 128px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: rgba(5, 9, 13, 0.62);
+  color: #dce8ef;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.detail-box h3 {
+  margin: 0 0 8px;
+  font-size: 16px;
+  letter-spacing: 0;
+}
+
+.detail-box dl {
+  display: grid;
+  grid-template-columns: 82px 1fr;
+  gap: 6px 10px;
+  margin: 0;
+}
+
+.detail-box dt {
+  color: var(--muted);
+}
+
+.detail-box dd {
+  margin: 0;
+}
+
+.toast {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 600;
+  max-width: min(420px, calc(100vw - 40px));
+  padding: 12px 14px;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  background: rgba(8, 12, 17, 0.96);
+  color: var(--text);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
+  font-size: 14px;
+}
+
+.leaflet-control-attribution {
+  font-size: 10px;
+}
+
+.aoi-rectangle {
+  stroke-dasharray: 8 6;
+}
+
+.mask-label {
+  border: 0;
+  background: rgba(7, 11, 15, 0.74);
+  color: #fff;
+  border-radius: 4px;
+  padding: 3px 6px;
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.32);
+}
+
+@media (max-width: 720px) {
+  .panel {
+    top: 12px;
+    left: 12px;
+    width: calc(100vw - 24px);
+    max-height: 52vh;
+    padding: 14px;
+  }
+
+  .brand h1 {
+    font-size: 21px;
+  }
+}
